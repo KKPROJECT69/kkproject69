@@ -6,7 +6,7 @@ this class so that proxy routing stays configurable and independent per route.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, Self
 
 import httpx
 
@@ -49,12 +49,12 @@ class AsyncHttpClient:
                 resp = await client.get(url, params=params, headers=headers)
                 resp.raise_for_status()
                 return resp.json()
-            except (httpx.HTTPError, ValueError) as exc:  # noqa: PERF203
+            except (httpx.HTTPError, ValueError) as exc:
                 last_exc = exc
                 await asyncio.sleep(1.0 * (attempt + 1))
         raise last_exc  # type: ignore[misc]
 
-    async def __aenter__(self) -> "AsyncHttpClient":
+    async def __aenter__(self) -> Self:
         await self.start()
         return self
 

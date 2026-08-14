@@ -4,9 +4,9 @@ from __future__ import annotations
 from ..analysis.market_analyzer import MarketAnalysis
 from ..models.enums import Direction
 from ..models.signal import Decision, StrategyResult
+from ..strategies.aggregator import StrategyAggregator
 from .ai import AIApproval, AIService, RuleBasedAIService
 from .confidence import combine_confidence
-from ..strategies.aggregator import StrategyAggregator
 
 
 class SignalDecisionEngine:

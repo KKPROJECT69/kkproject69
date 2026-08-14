@@ -7,7 +7,7 @@ milliseconds for WS ticks) in UTC. No payout is available here.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..config.settings import get_settings
 from ..models.candle import Candle
@@ -46,7 +46,7 @@ class QuotexProxySource(MarketDataSource):
                 ts = row["time"]
                 candles.append(
                     Candle(
-                        timestamp=datetime.fromtimestamp(ts, tz=timezone.utc),
+                        timestamp=datetime.fromtimestamp(ts, tz=UTC),
                         open=float(row["open"]),
                         high=float(row["high"]),
                         low=float(row["low"]),
@@ -65,6 +65,5 @@ class QuotexProxySource(MarketDataSource):
 def to_quotex_symbol(pair: str) -> str:
     """Normalize any OTC pair identifier to Quotex ``BASEQUOTE-OTC`` form."""
     text = "".join(ch for ch in pair.upper() if ch.isalnum())
-    if text.endswith("OTC"):
-        text = text[: -len("OTC")]
+    text = text.removesuffix("OTC")
     return f"{text}-OTC"

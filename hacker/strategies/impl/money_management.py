@@ -6,11 +6,11 @@ TODO: confirm stake/recovery parameters against the original methodology.
 """
 from __future__ import annotations
 
-from ..base import Strategy
 from ...analysis.market_analyzer import MarketAnalysis
 from ...models.candle import Candle
 from ...models.enums import Direction
 from ...models.signal import StrategyResult
+from ..base import Strategy
 
 
 class MoneyManagement(Strategy):

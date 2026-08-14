@@ -6,11 +6,11 @@ import io
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-from matplotlib.patches import Rectangle  # noqa: E402
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 
-from ..analysis.market_analyzer import MarketAnalysis  # noqa: E402
-from ..models.candle import Candle  # noqa: E402
+from ..analysis.market_analyzer import MarketAnalysis
+from ..models.candle import Candle
 
 _GREEN = "#26a69a"
 _RED = "#ef5350"

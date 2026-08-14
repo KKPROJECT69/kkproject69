@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from ..models.enums import Direction, ResultType
@@ -16,7 +16,7 @@ class PaperTrade:
     direction: Direction
     stake: float
     entry_price: float
-    opened_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    opened_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     result: ResultType | None = None
 
 

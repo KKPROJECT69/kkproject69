@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from ..data_sources.base import MarketDataSource
 from ..models.enums import Direction, Timeframe
-from .market_analyzer import MarketAnalysis, MarketAnalyzer
+from .market_analyzer import MarketAnalyzer
 
 
 @dataclass

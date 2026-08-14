@@ -12,9 +12,8 @@ import asyncio
 import logging
 import os
 import platform
-import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from . import __version__
@@ -25,7 +24,6 @@ from .models.signal import FinalSignal
 from .storage.db import Database
 from .storage.repositories import (
     AuditRepo,
-    OutcomeRepoSummary,
     SettingsRepo,
     SignalRepo,
     StatsRepo,
@@ -68,7 +66,7 @@ def _coerce(value: Any, kind: str, default: Any) -> Any:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class RingLogHandler(logging.Handler):
@@ -78,10 +76,10 @@ class RingLogHandler(logging.Handler):
         super().__init__()
         self.buffer: deque[str] = deque(maxlen=capacity)
 
-    def emit(self, record: logging.LogRecord) -> None:  # noqa: D401
+    def emit(self, record: logging.LogRecord) -> None:
         try:
             self.buffer.append(self.format(record))
-        except Exception:  # noqa: BLE001 - logging must never crash the app
+        except Exception:  # noqa: BLE001, S110 - logging must never crash the app
             pass
 
     def tail(self, limit: int = 200) -> list[str]:
@@ -163,7 +161,7 @@ class BotController:
     # ------------------------------------------------------------ lifecycle
     async def start(self) -> None:
         """Start the Telegram poller (if configured) and announce deployment."""
-        self.started_at = datetime.now(timezone.utc)
+        self.started_at = datetime.now(UTC)
         await self._load_state()
         self.running = False
         if self.telegram_ready and self.tg_app is not None:
@@ -182,7 +180,7 @@ class BotController:
             self._tg_task.cancel()
             try:
                 await self._tg_task
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001, S110 - graceful shutdown
                 pass
             self._tg_task = None
 
@@ -206,7 +204,7 @@ class BotController:
                 await app.updater.stop()
                 await app.stop()
                 await app.shutdown()
-            except Exception:  # noqa: BLE001
+            except Exception:  # noqa: BLE001, S110 - best-effort cleanup on shutdown
                 pass
 
     async def start_bot(self) -> bool:
@@ -389,7 +387,7 @@ class BotController:
             "signals_enabled": self.signals_enabled,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "uptime_seconds": (
-                (datetime.now(timezone.utc) - self.started_at).total_seconds()
+                (datetime.now(UTC) - self.started_at).total_seconds()
                 if self.started_at
                 else 0.0
             ),
@@ -410,6 +408,27 @@ class BotController:
 
     async def list_users(self) -> list[dict[str, Any]]:
         return await self.user_repo.list_all()
+
+    async def set_user(
+        self, telegram_id: int, level: str, banned: bool
+    ) -> dict[str, Any]:
+        """Create/update a user from the admin panel (level + ban in one step)."""
+        try:
+            parsed = AccessLevel(level)
+        except ValueError:
+            return {"ok": False, "error": f"invalid level: {level}"}
+        await self.user_repo.upsert_admin(telegram_id, parsed, bool(banned))
+        await self.audit_repo.log(
+            "admin",
+            "user_update",
+            f"{telegram_id}={parsed.value} {'BANNED' if banned else 'ACTIVE'}",
+        )
+        return {
+            "ok": True,
+            "telegram_id": telegram_id,
+            "level": parsed.value,
+            "banned": bool(banned),
+        }
 
     async def set_user_level(self, telegram_id: int, level: str) -> dict[str, Any]:
         try:

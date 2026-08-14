@@ -169,7 +169,7 @@ class GeminiAIService(AIService):
         try:
             raw = await self._call(direction, evidence, analysis)
             return _parse_llm_answer(raw, direction, evidence, analysis)
-        except Exception:
+        except Exception:  # noqa: BLE001 - AI failure falls back to local (fail-safe)
             return _local_fallback(direction, evidence, analysis)
 
     async def _call(
@@ -223,7 +223,7 @@ class GroqAIService(AIService):
         try:
             raw = await self._call(direction, evidence, analysis)
             return _parse_llm_answer(raw, direction, evidence, analysis)
-        except Exception:
+        except Exception:  # noqa: BLE001 - AI failure falls back to local (fail-safe)
             return _local_fallback(direction, evidence, analysis)
 
     async def _call(

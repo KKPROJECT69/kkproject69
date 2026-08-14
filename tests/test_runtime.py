@@ -21,7 +21,11 @@ from hacker.storage.repositories import (
 )
 from hacker.strategies.aggregator import StrategyAggregator
 from hacker.strategies.registry import StrategyRegistry
-from hacker.telegram import ChannelConfig, TelegramSignalDispatcher, TelegramSignalSender
+from hacker.telegram import (
+    ChannelConfig,
+    TelegramSignalDispatcher,
+    TelegramSignalSender,
+)
 from hacker.timing.engine import SignalTimingEngine
 
 
@@ -140,6 +144,28 @@ async def test_user_access_control(controller):
     assert row["banned"] == 1
     users = await controller.list_users()
     assert any(u["telegram_id"] == 123 for u in users)
+
+
+@pytest.mark.asyncio
+async def test_set_user_creates_new_user(controller):
+    """Admin panel must be able to add users that never messaged the bot."""
+    result = await controller.set_user(999, "VIP", True)
+    assert result["ok"] is True
+    row = await controller.user_repo.get(999)
+    assert row is not None
+    assert row["access_level"] == "VIP"
+    assert row["banned"] == 1
+
+
+@pytest.mark.asyncio
+async def test_user_upsert_does_not_reset_level(controller):
+    """A user messaging the bot (/start) must never wipe their admin-set level."""
+    await controller.user_repo.upsert(321, username="trader")
+    await controller.set_user_level(321, "VIP")
+    await controller.user_repo.upsert(321, username="trader2")  # simulates /start
+    row = await controller.user_repo.get(321)
+    assert row["access_level"] == "VIP"
+    assert row["username"] == "trader2"
 
 
 @pytest.mark.asyncio

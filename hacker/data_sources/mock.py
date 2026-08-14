@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from ..models.candle import Candle
 from ..models.enums import Timeframe
@@ -22,7 +22,7 @@ class MockMarketSource(MarketDataSource):
         rng = self._rng
         price = self._start_price
         step = timedelta(seconds=timeframe.seconds)
-        start = datetime.now(timezone.utc) - step * count
+        start = datetime.now(UTC) - step * count
         candles: list[Candle] = []
         for i in range(count):
             ts = start + step * i

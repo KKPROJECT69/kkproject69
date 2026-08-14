@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
-from datetime import datetime, timezone
 
 from telegram import Update
 from telegram.ext import (
@@ -21,12 +20,12 @@ from ..analysis.market_analyzer import MarketAnalyzer
 from ..backtest.engine import BacktestEngine
 from ..charting.render import render_chart
 from ..config.settings import get_settings
-from ..models.enums import AccessLevel, Direction, ResultType, Timeframe
+from ..models.enums import AccessLevel, Direction, Timeframe
 from ..models.signal import FinalSignal
 from ..pipeline import SignalPipeline
 from ..results.evaluator import ResultEvaluator
 from ..results.loss_review import LossReviewer
-from ..scanning.scanner import DEFAULT_OTC_PAIRS, PairScanner
+from ..scanning.scanner import PairScanner
 from ..storage.repositories import StatsRepo, UserRepo
 from ..users.access import AccessManager
 from .sender import TelegramSignalSender
@@ -109,12 +108,12 @@ class HackerBot:
                 log.info("Telegram bot polling started")
                 await app.updater.idle()
                 return
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 log.warning("Telegram connect attempt %d/%d failed: %s", attempt, max_attempts, exc)
                 try:
                     await app.stop()
                     await app.shutdown()
-                except Exception:  # noqa: BLE001
+                except Exception:  # noqa: BLE001, S110 - best-effort cleanup on shutdown
                     pass
                 if attempt >= max_attempts:
                     raise
@@ -214,7 +213,7 @@ class HackerBot:
         if data.startswith("strategy:"):
             state.strategy_id = data.split(":", 1)[1]
             await query.edit_message_text(
-                f"Strategy selected. Choose pair 👇", reply_markup=pair_menu("pair")
+                "Strategy selected. Choose pair 👇", reply_markup=pair_menu("pair")
             )
             return
         if data.startswith("payout:"):
@@ -277,9 +276,7 @@ class HackerBot:
             await query.edit_message_text("Choose a strategy 👇", reply_markup=strategy_menu(self.registry))
         elif data == "session:stop":
             await self._stop_session(query, state)
-        elif data == "session:result":
-            await self._show_session_result(query, state)
-        elif data == "menu:session_result":
+        elif data == "session:result" or data == "menu:session_result":
             await self._show_session_result(query, state)
         elif data == "menu:paper":
             await query.edit_message_text("Paper trading 👇", reply_markup=paper_menu())
@@ -317,8 +314,8 @@ class HackerBot:
             level = await self.access.level(user.id)
             allowed = level.value in ("VIP", "ADMIN") if data == "menu:vip" else level.value in ("PREMIUM", "VIP", "ADMIN")
             text = (
-                ("👑 <b>VIP ZONE</b>\nPremium signals, loss-recovery & exclusive features." if allowed
-                 else f"🔒 This area requires higher access. Your level: <b>{level.value}</b>")
+                "👑 <b>VIP ZONE</b>\nPremium signals, loss-recovery & exclusive features." if allowed
+                 else f"🔒 This area requires higher access. Your level: <b>{level.value}</b>"
             )
             await query.edit_message_text(text, parse_mode="HTML", reply_markup=back_menu())
         elif data == "menu:help":

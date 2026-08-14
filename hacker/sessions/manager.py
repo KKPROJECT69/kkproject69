@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from ..models.enums import SessionStatus
@@ -39,7 +39,7 @@ class SessionManager:
             strategy_id=strategy_id,
             pairs=pairs or [],
             status=SessionStatus.RUNNING,
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
         await self.repo.create(
             session.id, user_id, session_type, strategy_id, session.pairs
