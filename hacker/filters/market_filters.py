@@ -1,7 +1,7 @@
 """Market filters — pair allowlist, cooldown, and duplicate-adjacent guards."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 class PairFilter:
@@ -20,7 +20,7 @@ class CooldownFilter:
         self._last: dict[str, datetime] = {}
 
     def check(self, pair: str, when: datetime | None = None) -> tuple[bool, str]:
-        when = when or datetime.now(timezone.utc)
+        when = when or datetime.now(UTC)
         last = self._last.get(pair)
         if last is not None and (when - last).total_seconds() < self.cooldown_seconds:
             return False, "cooldown active for this pair"

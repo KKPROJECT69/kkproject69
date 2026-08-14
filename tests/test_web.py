@@ -22,7 +22,11 @@ from hacker.storage.repositories import (
 )
 from hacker.strategies.aggregator import StrategyAggregator
 from hacker.strategies.registry import StrategyRegistry
-from hacker.telegram import ChannelConfig, TelegramSignalDispatcher, TelegramSignalSender
+from hacker.telegram import (
+    ChannelConfig,
+    TelegramSignalDispatcher,
+    TelegramSignalSender,
+)
 from hacker.timing.engine import SignalTimingEngine
 from hacker.web import create_app
 
@@ -136,3 +140,25 @@ async def test_admin_api_actions_after_login(app):
         r = await c.get("/api/admin/logs")
         assert r.status_code == 200
         assert isinstance(r.json()["logs"], list)
+
+
+@pytest.mark.asyncio
+async def test_admin_add_user_creates_row(tmp_path):
+    """Regression: adding a brand-new user from the panel must insert a row."""
+    application, db = await _app(tmp_path)
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=application), base_url="http://test"
+        ) as c:
+            await c.post("/login", data={"username": "admin", "password": "secret"})
+            r = await c.post(
+                "/api/admin/users",
+                data={"telegram_id": "777", "level": "PREMIUM", "banned": "1"},
+            )
+            assert r.status_code == 303
+        row = await db.fetchone("SELECT * FROM users WHERE telegram_id = 777")
+        assert row is not None
+        assert row["access_level"] == "PREMIUM"
+        assert row["banned"] == 1
+    finally:
+        await db.close()

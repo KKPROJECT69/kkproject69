@@ -25,7 +25,7 @@ class NovexPayoutSource:
         params = {"pair": _to_novex_pair(pair), "count": 1}
         try:
             data = await self._client.get_json(url, params=params)
-        except Exception:
+        except Exception:  # noqa: BLE001 - payout lookup must never hard-fail (fail-safe)
             return None
         rows = data.get("data") if isinstance(data, dict) else None
         if not rows:
@@ -45,6 +45,5 @@ def _to_novex_pair(pair: str) -> str:
 
 def _strip_otc(pair: str) -> str:
     text = "".join(ch for ch in pair.upper() if ch.isalnum())
-    if text.endswith("OTC"):
-        text = text[: -len("OTC")]
+    text = text.removesuffix("OTC")
     return text

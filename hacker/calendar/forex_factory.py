@@ -33,7 +33,7 @@ class ForexFactoryCalendar:
         try:
             data = await self._client.get_json(url)
             return self._parse(data)
-        except Exception:
+        except Exception:  # noqa: BLE001 - news fetch must never hard-fail (fail-safe)
             return []
 
     @staticmethod

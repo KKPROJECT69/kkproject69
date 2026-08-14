@@ -1,7 +1,7 @@
 """Signal timing engine — 15–20s pre-candle delivery, stale & duplicate guards."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from ..models.enums import Timeframe
 
@@ -15,17 +15,17 @@ class SignalTimingEngine:
         self, timeframe: Timeframe, when: datetime | None = None
     ) -> datetime:
         """Return the UTC start of the next candle boundary for `timeframe`."""
-        when = when or datetime.now(timezone.utc)
+        when = when or datetime.now(UTC)
         seconds = timeframe.seconds
         epoch = int(when.timestamp())
         next_boundary = (epoch // seconds + 1) * seconds
-        return datetime.fromtimestamp(next_boundary, tz=timezone.utc)
+        return datetime.fromtimestamp(next_boundary, tz=UTC)
 
     def send_at(self, target_entry: datetime) -> datetime:
         return target_entry - timedelta(seconds=self.lead_seconds)
 
     def is_stale(self, target_entry: datetime, when: datetime | None = None) -> bool:
-        when = when or datetime.now(timezone.utc)
+        when = when or datetime.now(UTC)
         return self.send_at(target_entry) <= when
 
     def already_sent(self, pair: str, target_entry: datetime) -> bool:

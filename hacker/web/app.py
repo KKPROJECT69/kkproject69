@@ -226,8 +226,9 @@ def create_app(controller, auth: AdminAuth | None = None) -> FastAPI:
         telegram_id = int(raw_id)
         level = str(form.get("level") or "FREE").upper()
         banned = str(form.get("banned") or "0") == "1"
-        await controller.set_user_level(telegram_id, level)
-        await controller.set_user_banned(telegram_id, banned)
+        result = await controller.set_user(telegram_id, level, banned)
+        if not result.get("ok"):
+            return _redirect(str(result.get("error") or "Invalid user id."), "users")
         return _redirect(f"User {telegram_id} updated.", "users")
 
     # ----------------------------------------------------- admin JSON reads

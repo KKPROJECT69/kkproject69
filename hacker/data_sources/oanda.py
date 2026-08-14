@@ -55,7 +55,7 @@ class OandaMarketSource(MarketDataSource):
                 mid = row["mid"]
                 candles.append(
                     Candle(
-                        timestamp=datetime.fromisoformat(row["time"].replace("Z", "+00:00")),
+                        timestamp=datetime.fromisoformat(row["time"]),
                         open=float(mid["o"]),
                         high=float(mid["h"]),
                         low=float(mid["l"]),

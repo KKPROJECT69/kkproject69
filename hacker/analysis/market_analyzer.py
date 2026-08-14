@@ -142,8 +142,8 @@ class MarketAnalyzer:
         structure = _structure(highs, lows)
         fvg = _detect_fvg(candles)
 
-        support_levels = sorted(set(round(x, 4) for x in lows[-5:])) if lows else []
-        resistance_levels = sorted(set(round(x, 4) for x in highs[-5:])) if highs else []
+        support_levels = sorted({round(x, 4) for x in lows[-5:]}) if lows else []
+        resistance_levels = sorted({round(x, 4) for x in highs[-5:]}) if highs else []
         breakout_level = max(resistance_levels) if resistance_levels else last_close
         breakdown_level = min(support_levels) if support_levels else last_close
 

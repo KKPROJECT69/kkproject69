@@ -1,7 +1,7 @@
 """Session result report — consolidated on-demand partial/current report."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..results.statistics import SessionStatistics
 
@@ -16,7 +16,7 @@ class SessionReportGenerator:
     ) -> str:
         duration = ""
         if started_at is not None:
-            delta = datetime.now(timezone.utc) - started_at
+            delta = datetime.now(UTC) - started_at
             minutes = int(delta.total_seconds() // 60)
             duration = f"\n⏱ Duration: <b>{minutes} min</b>"
 

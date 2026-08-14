@@ -1,5 +1,5 @@
 """Tests for the no-AI intelligence features: regime, backtest, weights, MTG, chart."""
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from hacker.analysis.market_analyzer import MarketAnalysis, MarketAnalyzer
 from hacker.analysis.regime import RegimeDetector
@@ -7,16 +7,14 @@ from hacker.backtest.engine import BacktestEngine
 from hacker.charting.render import render_chart
 from hacker.learning.weights import ConfidenceWeights
 from hacker.models.candle import Candle
-from hacker.models.enums import Direction, Regime
-from hacker.models.signal import StrategyResult
+from hacker.models.enums import Regime
 from hacker.sessions.mtg import MTGEngine
-from hacker.data_sources.mock import MockMarketSource
 
 
 def _trending_candles(n: int = 120) -> list[Candle]:
     candles = []
     price = 100.0
-    t = datetime(2026, 8, 14, 6, 0, 0, tzinfo=timezone.utc)
+    t = datetime(2026, 8, 14, 6, 0, 0, tzinfo=UTC)
     for i in range(n):
         o = price
         c = o + 0.05

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from ..models.enums import AccessLevel, ResultType, SessionStatus
@@ -10,7 +10,7 @@ from .db import Database
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class UserRepo:
@@ -41,6 +41,31 @@ class UserRepo:
         await self.db.execute(
             "UPDATE users SET access_level = ? WHERE telegram_id = ?",
             (level.value, telegram_id),
+        )
+
+    async def upsert_admin(
+        self,
+        telegram_id: int,
+        level: AccessLevel,
+        banned: bool,
+        username: str | None = None,
+    ) -> None:
+        """Create the user if they don't exist yet, otherwise update level/banned.
+
+        Used by the web admin panel, which must be able to add users that have
+        never interacted with the bot. Never resets ``access_level`` to the
+        default on conflict (unlike :meth:`upsert`).
+        """
+        await self.db.execute(
+            """
+            INSERT INTO users (telegram_id, username, access_level, banned, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(telegram_id) DO UPDATE SET
+                access_level = excluded.access_level,
+                banned = excluded.banned,
+                username = COALESCE(excluded.username, users.username)
+            """,
+            (telegram_id, username, level.value, 1 if banned else 0, _now()),
         )
 
     async def set_settings(self, telegram_id: int, settings: dict) -> None:

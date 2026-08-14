@@ -4,7 +4,7 @@ market → analyze → 11 strategies → AI decision → filters → timing → 
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol
 from uuid import uuid4
 
@@ -16,7 +16,7 @@ from .decision.engine import SignalDecisionEngine
 from .filters.market_filters import MarketFilterEngine
 from .filters.news_filter import NewsFilter
 from .filters.payout_filter import PayoutFilter
-from .models.enums import Direction, Regime, RiskLevel, Timeframe
+from .models.enums import Regime, RiskLevel, Timeframe
 from .models.signal import FinalSignal
 from .strategies.registry import StrategyRegistry
 from .timing.engine import SignalTimingEngine
@@ -82,9 +82,12 @@ class SignalPipeline:
             return None
 
         # Regime filter: skip signals in a volatile (news-like) market.
-        if self.avoid_volatile and self.regime_detector is not None:
-            if self.regime_detector.detect(analysis) == Regime.VOLATILE:
-                return None
+        if (
+            self.avoid_volatile
+            and self.regime_detector is not None
+            and self.regime_detector.detect(analysis) == Regime.VOLATILE
+        ):
+            return None
 
         # Multi-timeframe confluence: require higher timeframes to agree.
         if self.require_confluence and self.confluence is not None:
@@ -131,7 +134,7 @@ class SignalPipeline:
             risk_level=risk_level,
             session_id=session_id,
             user_id=user_id,
-            generated_at=datetime.now(timezone.utc),
+            generated_at=datetime.now(UTC),
         )
         if self.dispatcher is not None:
             await self.dispatcher.dispatch(signal)

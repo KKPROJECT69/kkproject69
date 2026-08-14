@@ -33,7 +33,7 @@ channel automatically.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # runtime + test/lint tooling
 
 cp .env.example .env
 # edit .env -> set TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID, WEB_ADMIN_PASSWORD, ...
@@ -41,14 +41,18 @@ cp .env.example .env
 python main.py
 ```
 
+> Production only needs `requirements.txt` (runtime deps). Use
+> `requirements-dev.txt` for local development / running the test suite.
+
 The web dashboard is served on `http://localhost:8000` (set `PORT` to change).
 The admin panel is at `/admin` (login with `WEB_ADMIN_USERNAME` /
 `WEB_ADMIN_PASSWORD`).
 
-Run the test suite:
+Run the test suite and the linter:
 
 ```bash
 pytest -q
+ruff check .
 ```
 
 ---
@@ -59,6 +63,8 @@ pytest -q
 2. In Railway: **New Project → Deploy from GitHub repo → `KKPROJECT69/kkproject69`**.
 3. Railway auto-detects the build (Nixpacks reads `requirements.txt` +
    `nixpacks.toml`; `railway.json` sets the start command & healthcheck).
+   Only runtime dependencies (`requirements.txt`) are installed in production —
+   test tooling stays in `requirements-dev.txt`.
 4. Add the environment variables from `.env.example` under **Variables**
    (at minimum: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`,
    `WEB_ADMIN_PASSWORD`, `ADMIN_IDS`).

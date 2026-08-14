@@ -13,7 +13,6 @@ from ..analysis.market_analyzer import MarketAnalyzer
 from ..decision.engine import SignalDecisionEngine
 from ..models.candle import Candle
 from ..models.enums import Direction
-from ..models.signal import StrategyResult
 from ..strategies.aggregator import StrategyAggregator
 from ..strategies.registry import StrategyRegistry
 

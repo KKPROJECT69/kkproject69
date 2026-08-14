@@ -8,7 +8,6 @@ can never bypass the safety rules.
 from __future__ import annotations
 
 from ..backtest.engine import BacktestReport
-from ..models.enums import ResultType
 from ..storage.repositories import StatsRepo
 
 

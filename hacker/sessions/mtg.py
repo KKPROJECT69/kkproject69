@@ -6,7 +6,7 @@ signal until a win occurs (configurable multiplier & cap). This module only
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

@@ -5,11 +5,11 @@ without producing directional evidence. TODO: confirm risk thresholds.
 """
 from __future__ import annotations
 
-from ..base import Strategy
 from ...analysis.market_analyzer import MarketAnalysis
 from ...models.candle import Candle
 from ...models.enums import Direction
 from ...models.signal import StrategyResult
+from ..base import Strategy
 
 
 class RiskControl(Strategy):
