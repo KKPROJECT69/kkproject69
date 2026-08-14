@@ -48,6 +48,17 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     admin_ids: str = ""
 
+    # Web dashboard / admin control panel
+    port: int = 8000  # Railway injects PORT
+    web_host: str = "0.0.0.0"
+    web_admin_username: str = "admin"
+    web_admin_password: str = ""  # empty => admin panel disabled
+    web_cookie_name: str = "hacker_admin"
+    web_session_ttl_hours: int = 24
+
+    # Deployment notification (sent to the Telegram channel on startup)
+    deploy_notify: bool = True
+
     @property
     def admin_id_set(self) -> set[int]:
         return {

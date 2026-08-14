@@ -30,6 +30,14 @@ class AccessManager:
         except ValueError:
             return AccessLevel.FREE
 
+    async def is_banned(self, user_id: int) -> bool:
+        if user_id in self.admin_ids:
+            return False
+        row = await self.user_repo.get(user_id)
+        return bool(row and row.get("banned"))
+
     async def can(self, user_id: int, feature: str) -> bool:
+        if await self.is_banned(user_id):
+            return False
         level = await self.level(user_id)
         return level in FEATURE_GATES.get(feature, {AccessLevel.ADMIN})

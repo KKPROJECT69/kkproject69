@@ -115,3 +115,15 @@ def session_running_menu() -> InlineKeyboardMarkup:
 
 def back_menu() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(_grid([BACK]))
+
+
+def admin_menu() -> InlineKeyboardMarkup:
+    items = [
+        ("📊 SYSTEM STATUS", "admin:status"),
+        ("🚦 TOGGLE SIGNALS", "admin:toggle_signals"),
+        ("👥 USERS", "admin:users"),
+        ("📢 BROADCAST", "admin:broadcast"),
+        ("🔔 DEPLOY PING", "admin:ping"),
+        ("⬅️ Back", "menu:main"),
+    ]
+    return InlineKeyboardMarkup(_grid(items))
