@@ -8,13 +8,15 @@ from datetime import datetime, timezone
 from typing import Protocol
 from uuid import uuid4
 
+from .analysis.confluence import ConfluenceChecker
 from .analysis.market_analyzer import MarketAnalyzer
+from .analysis.regime import RegimeDetector
 from .data_sources.base import MarketDataSource
 from .decision.engine import SignalDecisionEngine
 from .filters.market_filters import MarketFilterEngine
 from .filters.news_filter import NewsFilter
 from .filters.payout_filter import PayoutFilter
-from .models.enums import Direction, RiskLevel, Timeframe
+from .models.enums import Direction, Regime, RiskLevel, Timeframe
 from .models.signal import FinalSignal
 from .strategies.registry import StrategyRegistry
 from .timing.engine import SignalTimingEngine
@@ -36,6 +38,10 @@ class SignalPipeline:
         market_filters: MarketFilterEngine,
         timing: SignalTimingEngine,
         dispatcher: SignalSink | None = None,
+        confluence: ConfluenceChecker | None = None,
+        regime_detector: RegimeDetector | None = None,
+        require_confluence: bool = False,
+        avoid_volatile: bool = False,
     ) -> None:
         self.source = source
         self.analyzer = analyzer
@@ -46,6 +52,10 @@ class SignalPipeline:
         self.market_filters = market_filters
         self.timing = timing
         self.dispatcher = dispatcher
+        self.confluence = confluence
+        self.regime_detector = regime_detector
+        self.require_confluence = require_confluence
+        self.avoid_volatile = avoid_volatile
 
     async def generate(
         self,
@@ -55,6 +65,8 @@ class SignalPipeline:
         context: dict | None = None,
         user_id: int | None = None,
         session_id: str | None = None,
+        min_payout: float | None = None,
+        skip_news: bool = False,
     ) -> FinalSignal | None:
         context = context or {}
 
@@ -69,16 +81,30 @@ class SignalPipeline:
         if not decision.approved:
             return None
 
+        # Regime filter: skip signals in a volatile (news-like) market.
+        if self.avoid_volatile and self.regime_detector is not None:
+            if self.regime_detector.detect(analysis) == Regime.VOLATILE:
+                return None
+
+        # Multi-timeframe confluence: require higher timeframes to agree.
+        if self.require_confluence and self.confluence is not None:
+            conf = await self.confluence.check(
+                pair, timeframe, base_direction=decision.direction
+            )
+            if conf.direction != decision.direction:
+                return None
+
         target = self.timing.target_candle_start(timeframe)
 
         payout = await self.source.get_payout(pair)
-        ok, _reason = self.payout_filter.check(payout)
-        if not ok:
+        effective_min = min_payout if min_payout is not None else self.payout_filter.min_payout
+        if payout is not None and effective_min > 0 and payout < effective_min:
             return None
 
-        ok, _reason = self.news_filter.check(context.get("news_events", []), target)
-        if not ok:
-            return None
+        if not skip_news:
+            ok, _reason = self.news_filter.check(context.get("news_events", []), target)
+            if not ok:
+                return None
 
         ok, _reasons = self.market_filters.apply(pair)
         if not ok:

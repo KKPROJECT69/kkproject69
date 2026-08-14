@@ -1,4 +1,12 @@
-"""Market analysis exports."""
+"""Analysis exports."""
+from .confluence import ConfluenceChecker, ConfluenceResult
 from .market_analyzer import MarketAnalysis, MarketAnalyzer
+from .regime import RegimeDetector
 
-__all__ = ["MarketAnalysis", "MarketAnalyzer"]
+__all__ = [
+    "ConfluenceChecker",
+    "ConfluenceResult",
+    "MarketAnalysis",
+    "MarketAnalyzer",
+    "RegimeDetector",
+]

@@ -19,10 +19,15 @@ class SignalDecisionEngine:
         self.aggregator = aggregator or StrategyAggregator()
         self.ai = ai or RuleBasedAIService()
         self.min_confidence = min_confidence
+        self.weights: dict[str, float] = {}
+
+    def set_weights(self, weights: dict[str, float]) -> None:
+        """Update confidence weights (from backtest/live learning)."""
+        self.weights = weights
 
     # ---- shared helpers -------------------------------------------------
     def _evidence(self, results: list[StrategyResult]) -> tuple:
-        evidence = self.aggregator.aggregate(results)
+        evidence = self.aggregator.aggregate(results, weights=self.weights or None)
         confidence = combine_confidence(evidence)
         return evidence, confidence
 

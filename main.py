@@ -11,7 +11,9 @@ import logging
 from telegram import Bot
 from telegram.request import HTTPXRequest
 
+from hacker.analysis.confluence import ConfluenceChecker
 from hacker.analysis.market_analyzer import MarketAnalyzer
+from hacker.analysis.regime import RegimeDetector
 from hacker.config.settings import get_settings
 from hacker.data_sources import get_market_source
 from hacker.decision.ai import build_ai_service
@@ -40,10 +42,11 @@ from hacker.timing.engine import SignalTimingEngine
 log = logging.getLogger("hacker")
 
 
-def build_pipeline(dispatcher=None) -> SignalPipeline:
+def build_pipeline(dispatcher=None, source=None) -> SignalPipeline:
     settings = get_settings()
+    market_source = source or get_market_source()
     return SignalPipeline(
-        source=get_market_source(),
+        source=market_source,
         analyzer=MarketAnalyzer(),
         registry=StrategyRegistry(),
         decision_engine=SignalDecisionEngine(
@@ -56,6 +59,10 @@ def build_pipeline(dispatcher=None) -> SignalPipeline:
         market_filters=MarketFilterEngine(),
         timing=SignalTimingEngine(settings.signal_lead_seconds),
         dispatcher=dispatcher,
+        confluence=ConfluenceChecker(market_source),
+        regime_detector=RegimeDetector(),
+        require_confluence=settings.require_confluence,
+        avoid_volatile=settings.avoid_volatile,
     )
 
 
@@ -87,7 +94,7 @@ async def amain() -> None:
                 request = HTTPXRequest(proxy=settings.telegram_proxy)
             bot = Bot(token=settings.telegram_bot_token, request=request)
             dispatcher.bot = bot
-            hacker_bot = HackerBot(pipeline, user_repo, registry=registry)
+            hacker_bot = HackerBot(pipeline, user_repo, stats_repo=stats_repo, registry=registry)
             await hacker_bot.run()
         else:
             log.info("Telegram not configured — running offline smoke test")

@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     min_confidence: float = 70.0
     min_payout: float = 0.0
     signal_lead_seconds: float = 17.0
+    require_confluence: bool = False
+    avoid_volatile: bool = False
 
     # Storage / ops
     db_path: str = "data/hacker.db"

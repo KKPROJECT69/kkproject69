@@ -9,8 +9,24 @@ class StrategyAggregator:
     def __init__(self, conflict_threshold: float = 50.0) -> None:
         self.conflict_threshold = conflict_threshold
 
-    def aggregate(self, results: list[StrategyResult]) -> AggregateEvidence:
-        directional = [r for r in results if r.is_directional]
+    def aggregate(
+        self,
+        results: list[StrategyResult],
+        weights: dict[str, float] | None = None,
+    ) -> AggregateEvidence:
+        weights = weights or {}
+        directional = []
+        for r in results:
+            if not r.is_directional:
+                continue
+            rr = r
+            w = weights.get(r.strategy_id)
+            if w is not None:
+                import copy
+
+                rr = copy.copy(r)
+                rr.confidence = round(min(100.0, r.confidence * w * 2), 2)
+            directional.append(rr)
         calls = [r for r in directional if r.direction == Direction.CALL]
         puts = [r for r in directional if r.direction == Direction.PUT]
         risks: list[str] = []
