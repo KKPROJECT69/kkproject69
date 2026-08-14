@@ -4,7 +4,7 @@ from __future__ import annotations
 from ..analysis.market_analyzer import MarketAnalysis
 from ..models.enums import Direction
 from ..models.signal import Decision, StrategyResult
-from .ai import AIService, RuleBasedAIService
+from .ai import AIApproval, AIService, RuleBasedAIService
 from .confidence import combine_confidence
 from ..strategies.aggregator import StrategyAggregator
 
@@ -20,16 +20,13 @@ class SignalDecisionEngine:
         self.ai = ai or RuleBasedAIService()
         self.min_confidence = min_confidence
 
-    def decide(
-        self,
-        results: list[StrategyResult],
-        analysis: MarketAnalysis,
-        context: dict | None = None,
-    ) -> Decision:
-        del context  # reserved for news/payout context expansion
+    # ---- shared helpers -------------------------------------------------
+    def _evidence(self, results: list[StrategyResult]) -> tuple:
         evidence = self.aggregator.aggregate(results)
         confidence = combine_confidence(evidence)
+        return evidence, confidence
 
+    def _rejection(self, evidence, confidence: float) -> Decision | None:
         if evidence.conflicting:
             return Decision(
                 direction=Direction.NO_TRADE,
@@ -41,7 +38,6 @@ class SignalDecisionEngine:
                 conflicts=evidence.opposing,
                 risks=evidence.risks,
             )
-
         if evidence.total_directional == 0:
             return Decision(
                 direction=Direction.NO_TRADE,
@@ -51,7 +47,6 @@ class SignalDecisionEngine:
                 reasoning="No directional strategy evidence.",
                 risks=evidence.risks,
             )
-
         if confidence < self.min_confidence:
             return Decision(
                 direction=Direction.NO_TRADE,
@@ -65,16 +60,54 @@ class SignalDecisionEngine:
                 supporting_strategies=evidence.supporting,
                 risks=evidence.risks,
             )
+        return None
 
-        ai_approval = self.ai.approve(evidence.direction, evidence, analysis)
-        approved = ai_approval.approved and evidence.direction in (Direction.CALL, Direction.PUT)
+    def _finalize(
+        self,
+        direction: Direction,
+        evidence,
+        confidence: float,
+        approval: AIApproval,
+    ) -> Decision:
+        approved = approval.approved and direction in (Direction.CALL, Direction.PUT)
         return Decision(
-            direction=evidence.direction,
+            direction=direction,
             confidence=confidence,
             approved=approved,
-            verdict=ai_approval.verdict,
-            reasoning=ai_approval.reasoning,
+            verdict=approval.verdict,
+            reasoning=approval.reasoning,
             supporting_strategies=evidence.supporting,
             conflicts=[],
             risks=evidence.risks,
         )
+
+    # ---- decision entry points ------------------------------------------
+    def decide(
+        self,
+        results: list[StrategyResult],
+        analysis: MarketAnalysis,
+        context: dict | None = None,
+    ) -> Decision:
+        """Synchronous decision (local AI only)."""
+        del context
+        evidence, confidence = self._evidence(results)
+        rejection = self._rejection(evidence, confidence)
+        if rejection is not None:
+            return rejection
+        approval = self.ai.approve(evidence.direction, evidence, analysis)
+        return self._finalize(evidence.direction, evidence, confidence, approval)
+
+    async def decide_async(
+        self,
+        results: list[StrategyResult],
+        analysis: MarketAnalysis,
+        context: dict | None = None,
+    ) -> Decision:
+        """Async decision (respects the configured AI provider)."""
+        del context
+        evidence, confidence = self._evidence(results)
+        rejection = self._rejection(evidence, confidence)
+        if rejection is not None:
+            return rejection
+        approval = await self.ai.approve_async(evidence.direction, evidence, analysis)
+        return self._finalize(evidence.direction, evidence, confidence, approval)

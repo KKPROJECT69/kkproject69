@@ -14,7 +14,7 @@ from telegram.request import HTTPXRequest
 from hacker.analysis.market_analyzer import MarketAnalyzer
 from hacker.config.settings import get_settings
 from hacker.data_sources import get_market_source
-from hacker.decision.ai import RuleBasedAIService
+from hacker.decision.ai import build_ai_service
 from hacker.decision.engine import SignalDecisionEngine
 from hacker.filters import MarketFilterEngine, NewsFilter, PayoutFilter
 from hacker.models.enums import Timeframe
@@ -48,7 +48,7 @@ def build_pipeline(dispatcher=None) -> SignalPipeline:
         registry=StrategyRegistry(),
         decision_engine=SignalDecisionEngine(
             aggregator=StrategyAggregator(),
-            ai=RuleBasedAIService(),
+            ai=build_ai_service(),
             min_confidence=settings.min_confidence,
         ),
         payout_filter=PayoutFilter(settings.min_payout),

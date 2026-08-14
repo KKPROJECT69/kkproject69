@@ -65,7 +65,7 @@ class SignalPipeline:
         analysis = self.analyzer.analyze(candles, pair)
         strategies = self.registry.select(strategy_ids)
         results = [s.analyze(analysis, candles) for s in strategies]
-        decision = self.decision_engine.decide(results, analysis, context)
+        decision = await self.decision_engine.decide_async(results, analysis, context)
         if not decision.approved:
             return None
 

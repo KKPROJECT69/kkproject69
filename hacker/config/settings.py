@@ -29,9 +29,12 @@ class Settings(BaseSettings):
     # News calendar
     forex_factory_url: str = ""
 
-    # AI reasoning/approval
-    ai_api_url: str = ""
-    ai_api_key: str = ""
+    # AI reasoning/approval — 100% free options (local default = zero error)
+    ai_provider: str = "local"  # local | gemini | groq
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.0-flash"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
 
     # Signal / safety gates
     min_confidence: float = 70.0
