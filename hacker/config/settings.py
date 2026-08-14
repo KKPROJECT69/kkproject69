@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     )
 
     # Telegram
-    telegram_bot_token: str = ""
-    telegram_channel_id: str = ""
+    telegram_bot_token: str = "8983290716:AAF96S1P7Y1I3H0KDJ3j123fZoclyb3dvGk"
+    telegram_channel_id: str = "-1003958046134"
     telegram_proxy: str | None = None
     market_proxy: str | None = None
 
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     port: int = 8000  # Railway injects PORT
     web_host: str = "0.0.0.0"
     web_admin_username: str = "admin"
-    web_admin_password: str = ""  # empty => admin panel disabled
+    web_admin_password: str = "$"  # default admin password
     web_cookie_name: str = "hacker_admin"
     web_session_ttl_hours: int = 24
 
