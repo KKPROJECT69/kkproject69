@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     require_confluence: bool = False
     avoid_volatile: bool = False
 
+    # Automatic signal engine (started explicitly from the admin panel)
+    engine_pairs: str = "EURUSD-OTC,GBPUSD-OTC,USDJPY-OTC"
+    engine_timeframe: str = "1m"
+    engine_interval_seconds: float = 60.0
+
     # Storage / ops
     db_path: str = "data/hacker.db"
     log_level: str = "INFO"

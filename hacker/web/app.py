@@ -27,6 +27,9 @@ _EDITABLE_SETTINGS = [
     "market_source",
     "require_confluence",
     "avoid_volatile",
+    "engine_pairs",
+    "engine_timeframe",
+    "engine_interval_seconds",
 ]
 
 
@@ -145,14 +148,30 @@ def create_app(controller, auth: AdminAuth | None = None) -> FastAPI:
             ok = await controller.start_bot()
             return _redirect("Bot started." if ok else "Telegram not configured.", "bot")
         if action == "stop":
-            await controller.stop()
-            return _redirect("Bot stopped.", "bot")
+            await controller.stop_bot()
+            return _redirect("Telegram bot stopped. Signal engine was not changed.", "bot")
         if action == "restart":
             ok = await controller.restart_bot()
             return _redirect(
                 "Bot restarted." if ok else "Telegram not configured.", "bot"
             )
         return _redirect("Unknown action.", "bot")
+
+    @app.post("/api/admin/engine")
+    async def admin_engine(request: Request) -> RedirectResponse:
+        _guard(request)
+        form = await request.form()
+        action = str(form.get("action") or "")
+        if action == "start":
+            await controller.start_engine()
+            return _redirect("ENGINE LIVE — automatic scans and signal delivery started.", "engine")
+        if action == "stop":
+            await controller.stop_engine()
+            return _redirect("Engine stopped. Signal delivery gate was not changed.", "engine")
+        if action == "restart":
+            await controller.restart_engine()
+            return _redirect("Engine restarted with the latest settings.", "engine")
+        return _redirect("Unknown engine action.", "engine")
 
     @app.post("/api/admin/signals")
     async def admin_signals(request: Request) -> RedirectResponse:
