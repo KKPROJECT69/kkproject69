@@ -133,6 +133,17 @@ async def test_admin_api_actions_after_login(app):
         status = await c.get("/api/status")
         assert status.json()["signals_enabled"] is False
 
+        # START ENGINE is a single operation that makes the scanner live and
+        # opens the signal gate. It works in dashboard-only mode too.
+        r = await c.post("/api/admin/engine", data={"action": "start"})
+        assert r.status_code == 303
+        status = await c.get("/api/status")
+        assert status.json()["engine"]["running"] is True
+        assert status.json()["signals_enabled"] is True
+        r = await c.post("/api/admin/engine", data={"action": "stop"})
+        assert r.status_code == 303
+        assert (await c.get("/api/status")).json()["engine"]["running"] is False
+
         await c.post(
             "/api/admin/users",
             data={"telegram_id": "555", "level": "VIP", "banned": "0"},

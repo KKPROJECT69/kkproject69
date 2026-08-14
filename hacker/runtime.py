@@ -46,6 +46,12 @@ SETTING_SCHEMA: dict[str, str] = {
     "market_source": "str",
     "require_confluence": "bool",
     "avoid_volatile": "bool",
+    # Automatic engine controls. These are persisted, but the engine itself is
+    # deliberately not auto-started after a process restart: an administrator
+    # must explicitly press START ENGINE.
+    "engine_pairs": "str",
+    "engine_timeframe": "str",
+    "engine_interval_seconds": "float",
 }
 
 
@@ -126,6 +132,14 @@ class BotController:
         self.overrides: dict[str, Any] = {}
         self._source_name: str = settings.market_source
         self._tg_task: asyncio.Task | None = None
+        self._engine_task: asyncio.Task | None = None
+        self._engine_started_at: datetime | None = None
+        self._engine_last_cycle_at: datetime | None = None
+        self._engine_cycles: int = 0
+        self._engine_scans: int = 0
+        self._engine_signals: int = 0
+        self._engine_errors: int = 0
+        self._engine_last_error: str | None = None
 
         # Telemetry
         self.log_handler = RingLogHandler()
@@ -174,7 +188,8 @@ class BotController:
             log.info("Telegram not configured — web dashboard only mode")
 
     async def stop(self) -> None:
-        """Gracefully stop the Telegram poller."""
+        """Gracefully stop the automatic engine and Telegram poller."""
+        await self.stop_engine()
         self.running = False
         if self._tg_task is not None:
             self._tg_task.cancel()
@@ -215,12 +230,105 @@ class BotController:
             self._tg_task = asyncio.create_task(self._poll())
         return True
 
+    async def stop_bot(self) -> None:
+        """Stop only Telegram delivery; the market engine remains independent."""
+        self.running = False
+        if self._tg_task is not None:
+            self._tg_task.cancel()
+            try:
+                await self._tg_task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001, S110
+                pass
+            self._tg_task = None
+
     async def restart_bot(self) -> bool:
-        await self.stop()
-        if not self.telegram_ready or self.tg_app is None:
-            return False
-        self._tg_task = asyncio.create_task(self._poll())
+        await self.stop_bot()
+        return await self.start_bot()
+
+    # ------------------------------------------------------ signal engine
+    @property
+    def engine_running(self) -> bool:
+        return self._engine_task is not None and not self._engine_task.done()
+
+    def _engine_config(self) -> tuple[list[str], Timeframe, float]:
+        raw_pairs = str(self.overrides.get("engine_pairs") or "EURUSD-OTC")
+        pairs = [p.strip().upper() for p in raw_pairs.split(",") if p.strip()]
+        # Keep a bad admin input from creating an unbounded or malformed scan.
+        pairs = [p for p in pairs[:25] if all(c.isalnum() or c in "-_" for c in p)]
+        if not pairs:
+            pairs = ["EURUSD-OTC"]
+        try:
+            timeframe = Timeframe(str(self.overrides.get("engine_timeframe") or "1m"))
+        except ValueError:
+            timeframe = Timeframe.M1
+        interval = max(5.0, float(self.overrides.get("engine_interval_seconds") or 60.0))
+        return pairs, timeframe, interval
+
+    async def start_engine(self) -> bool:
+        """Enable delivery and start continuous market scans.
+
+        Starting the engine is one atomic admin operation: the signal kill
+        switch is opened, Telegram polling is started when configured, and a
+        single background scanner is created. Repeated clicks are idempotent.
+        """
+        await self.set_signals_enabled(True)
+        if self.telegram_ready:
+            await self.start_bot()
+        if self.engine_running:
+            return True
+        self._engine_started_at = datetime.now(UTC)
+        self._engine_last_error = None
+        self._engine_task = asyncio.create_task(self._engine_loop(), name="signal-engine")
+        pairs, timeframe, interval = self._engine_config()
+        await self.audit_repo.log(
+            "admin", "engine_start", f"{','.join(pairs)} {timeframe.value} every {interval:g}s"
+        )
+        log.info("Signal engine started: %s %s every %ss", pairs, timeframe.value, interval)
         return True
+
+    async def stop_engine(self) -> None:
+        task = self._engine_task
+        self._engine_task = None
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        if task is not None:
+            await self.audit_repo.log("admin", "engine_stop", "automatic scanning stopped")
+            log.info("Signal engine stopped")
+
+    async def restart_engine(self) -> bool:
+        await self.stop_engine()
+        return await self.start_engine()
+
+    async def _engine_loop(self) -> None:
+        """Run scans forever without allowing one provider error to kill the engine."""
+        try:
+            while True:
+                pairs, timeframe, interval = self._engine_config()
+                for pair in pairs:
+                    try:
+                        self._engine_scans += 1
+                        signal = await self.pipeline.generate(pair, timeframe)
+                        if signal is not None:
+                            self._engine_signals += 1
+                    except asyncio.CancelledError:
+                        raise
+                    except Exception as exc:
+                        self._engine_errors += 1
+                        self._engine_last_error = f"{pair}: {exc}"[:500]
+                        log.exception("Engine scan failed for %s", pair)
+                self._engine_cycles += 1
+                self._engine_last_cycle_at = datetime.now(UTC)
+                await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self._engine_errors += 1
+            self._engine_last_error = str(exc)[:500]
+            log.exception("Signal engine stopped unexpectedly")
 
     # -------------------------------------------------------- notifications
     async def send_deploy_notification(self) -> bool:
@@ -279,6 +387,9 @@ class BotController:
             "market_source": s.market_source,
             "require_confluence": s.require_confluence,
             "avoid_volatile": s.avoid_volatile,
+            "engine_pairs": s.engine_pairs,
+            "engine_timeframe": s.engine_timeframe,
+            "engine_interval_seconds": s.engine_interval_seconds,
         }
 
     async def _load_state(self) -> None:
@@ -385,6 +496,16 @@ class BotController:
             "running": self.running,
             "telegram_configured": self.telegram_ready,
             "signals_enabled": self.signals_enabled,
+            "engine": {
+                "running": self.engine_running,
+                "started_at": self._engine_started_at.isoformat() if self._engine_started_at else None,
+                "last_cycle_at": self._engine_last_cycle_at.isoformat() if self._engine_last_cycle_at else None,
+                "cycles": self._engine_cycles,
+                "scans": self._engine_scans,
+                "signals": self._engine_signals,
+                "errors": self._engine_errors,
+                "last_error": self._engine_last_error,
+            },
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "uptime_seconds": (
                 (datetime.now(UTC) - self.started_at).total_seconds()

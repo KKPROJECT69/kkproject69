@@ -24,7 +24,7 @@ channel automatically.
 |-----------|--------------|
 | **Telegram bot** | Button-first menus, live/combined/single sessions, OTC future signal, market analysis, backtest, payout ranking, paper trading, admin menu. |
 | **Web dashboard** | Plain black & white. Live status, signal feed, win rate, uptime. |
-| **Admin control panel** | Password-protected. **Full bot control**: start/stop/restart the bot, enable/disable the signal gate, send test signals, broadcast to the channel, manage user access levels, ban users, edit runtime settings, view logs + audit trail. |
+| **Advanced admin panel** | Password-protected. **START ENGINE** launches continuous market scans, enables signals, and brings Telegram delivery online. Includes independent bot/engine controls, live engine telemetry, kill switch, test signals, broadcasts, access management, runtime settings, logs, and audit trail. |
 | **Deploy notification** | On startup the bot announces deployment to your Telegram channel. |
 
 ---
@@ -97,6 +97,7 @@ anywhere: `docker build -t hacker-genai . && docker run --env-file .env -p 8000:
 | `AI_PROVIDER` | no | `local` | `local` \| `gemini` \| `groq` |
 | `GEMINI_API_KEY` / `GROQ_API_KEY` | no | — | Optional free AI providers |
 | `MIN_CONFIDENCE` / `MIN_PAYOUT` / `SIGNAL_LEAD_SECONDS` | no | `70` / `0` / `17` | Signal safety gates |
+| `ENGINE_PAIRS` / `ENGINE_TIMEFRAME` / `ENGINE_INTERVAL_SECONDS` | no | 3 OTC pairs / `1m` / `60` | Automatic scanner schedule |
 | `DB_PATH` | no | `data/hacker.db` | SQLite location |
 | `LOG_LEVEL` | no | `INFO` | Log verbosity |
 | `ADMIN_IDS` | no | — | Comma-separated Telegram admin user IDs |
@@ -137,11 +138,13 @@ Four levels, enforced **server-side**:
 - `/healthz` — JSON healthcheck (Railway)
 - `/api/status`, `/api/signals` — JSON read APIs
 
-The panel lets you **control everything**: start/stop/restart the bot, toggle
-the signal gate (kill switch), generate & send a test signal, broadcast a
-message, edit runtime settings (confidence gate, payout gate, lead seconds,
-cooldown, market source, confluence/volatility guards), manage users, and
-watch live logs + audit history. Runtime settings persist across restarts.
+The panel lets you **control everything**: **START ENGINE** atomically enables
+signals, starts Telegram when configured, and launches continuous pair scans;
+start/stop/restart the bot or engine independently; toggle the signal gate
+(kill switch); generate a test signal; broadcast; edit safety and engine
+settings; manage users; and watch telemetry, logs, and audit history. Runtime
+settings persist across restarts. See [`docs/ADMIN_PANEL.md`](docs/ADMIN_PANEL.md)
+for credentials, operations, safety behavior, and the admin HTTP route guide.
 
 ---
 

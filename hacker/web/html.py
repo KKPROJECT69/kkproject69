@@ -275,6 +275,7 @@ def _settings_form(settings: dict[str, Any]) -> str:
     signals_on = bool(settings.get("signals_enabled"))
     confluence = bool(settings.get("require_confluence"))
     volatile = bool(settings.get("avoid_volatile"))
+    engine_timeframe = str(settings.get("engine_timeframe") or "1m")
 
     def sel(name: str, options: list[str], current: str) -> str:
         opts = "".join(
@@ -300,6 +301,15 @@ def _settings_form(settings: dict[str, Any]) -> str:
         f"<div class='field'><label>Avoid Volatile</label>{sel('avoid_volatile', ['off', 'on'], 'on' if volatile else 'off')}</div>"
         f"<div class='field'><label>Signal Delivery</label>{sel('signals_enabled', ['on', 'off'], 'on' if signals_on else 'off')}</div>"
         "</div>"
+        "<h2>Automatic Engine</h2>"
+        "<div class='row'>"
+        f"<div class='field'><label>Pairs (comma separated, max 25)</label>"
+        f"<input name='engine_pairs' value='{esc(settings.get('engine_pairs', 'EURUSD-OTC'))}'></div>"
+        f"<div class='field'><label>Timeframe</label>{sel('engine_timeframe', ['1m', '5m', '15m', '30m', '1h'], engine_timeframe)}</div>"
+        f"<div class='field'><label>Scan Interval (seconds)</label>"
+        f"<input name='engine_interval_seconds' type='number' step='1' min='5' max='3600' value='{esc(settings.get('engine_interval_seconds', 60))}'></div>"
+        "</div>"
+        "<p class='note'>Save settings, then start or restart the engine. START ENGINE also enables the signal gate.</p>"
         "<div class='mt'><button type='submit'>SAVE SETTINGS</button></div>"
         "</form>"
     )
@@ -334,11 +344,13 @@ function pullLogs(){
     if(box){box.textContent=(d.logs||[]).join('\\n');}
   }).catch(function(){});
 }
+var initialTab=new URLSearchParams(window.location.search).get('tab');
+if(initialTab&&document.querySelector('[data-pane="'+initialTab+'"]')){tab(initialTab);}
 setInterval(function(){if(document.querySelector('.pane.on')&&document.querySelector('.pane.on').dataset.pane==='logs'){pullLogs();}},3000);
 setInterval(function(){
   fetch('/api/status').then(function(r){return r.json()}).then(function(d){
     var el=document.getElementById('live-status');
-    if(el){el.textContent=((d.running?'ONLINE':'STANDBY')+' | SIGNALS '+(d.signals_enabled?'ON':'OFF')+' | UP '+Math.floor(d.uptime_seconds)+'s | '+d.signals_total+' signals');}
+    if(el){el.textContent=('ENGINE '+((d.engine&&d.engine.running)?'LIVE':'STOPPED')+' | TELEGRAM '+(d.running?'ONLINE':'STANDBY')+' | SIGNALS '+(d.signals_enabled?'ON':'OFF')+' | '+d.signals_total+' signals');}
   }).catch(function(){});
 },5000);
 </script>
@@ -356,6 +368,8 @@ def admin_page(
     banner = f'<div class="banner ok">{esc(msg)}</div>' if msg else ""
     online = bool(status.get("running"))
     enabled = bool(status.get("signals_enabled"))
+    engine = status.get("engine") or {}
+    engine_live = bool(engine.get("running"))
     stats = status.get("stats") or {}
     pairs = [
         "USDBDT-OTC", "USDPKR-OTC", "BTCUSD-OTC", "EURUSD-OTC", "GBPUSD-OTC",
@@ -371,7 +385,8 @@ def admin_page(
         "<p class='sub'><span id='live-status' class='mono'></span></p>"
         f"{banner}"
         '<div class="grid">'
-        f"<div class='card'><div class='k'>Bot</div><div class='v'>{_badge('ONLINE' if online else 'STANDBY', fill=online)}</div></div>"
+        f"<div class='card'><div class='k'>Engine</div><div class='v'>{_badge('LIVE' if engine_live else 'STOPPED', fill=engine_live)}</div></div>"
+        f"<div class='card'><div class='k'>Telegram Bot</div><div class='v'>{_badge('ONLINE' if online else 'STANDBY', fill=online)}</div></div>"
         f"<div class='card'><div class='k'>Signal Gate</div><div class='v'>{_badge('ON' if enabled else 'OFF', fill=enabled)}</div></div>"
         f"<div class='card'><div class='k'>Signals</div><div class='v'>{esc(status.get('signals_total'))}</div></div>"
         f"<div class='card'><div class='k'>Win Rate</div><div class='v'>{esc(stats.get('accuracy'))}%</div></div>"
@@ -381,6 +396,7 @@ def admin_page(
 
         '<div class="tabs">'
         '<div class="tab on" data-tab="overview" onclick="tab(\'overview\')">Overview</div>'
+        '<div class="tab" data-tab="engine" onclick="tab(\'engine\')">Engine</div>'
         '<div class="tab" data-tab="bot" onclick="tab(\'bot\')">Bot</div>'
         '<div class="tab" data-tab="users" onclick="tab(\'users\')">Users</div>'
         '<div class="tab" data-tab="settings" onclick="tab(\'settings\')">Settings</div>'
@@ -392,8 +408,8 @@ def admin_page(
         # ---- overview
         '<div class="pane on" data-pane="overview">'
         "<div class='row'>"
-        f"<form method='post' action='/api/admin/bot'><input type='hidden' name='action' value='{'stop' if online else 'start'}'>"
-        f"<button type='submit'>{'STOP BOT' if online else 'START BOT'}</button></form>"
+        f"<form method='post' action='/api/admin/engine'><input type='hidden' name='action' value='{'stop' if engine_live else 'start'}'>"
+        f"<button type='submit'>{'STOP ENGINE' if engine_live else 'START ENGINE'}</button></form>"
         f"<form method='post' action='/api/admin/signals'><input type='hidden' name='enabled' value='{'off' if enabled else 'on'}'>"
         f"<button type='submit' class='ghost'>{'DISABLE SIGNALS' if enabled else 'ENABLE SIGNALS'}</button></form>"
         f"<form method='post' action='/api/admin/ping'><button type='submit' class='ghost'>SEND DEPLOY PING</button></form>"
@@ -413,6 +429,27 @@ def admin_page(
         "<textarea name='text' rows='3' placeholder='Type an announcement for the Telegram channel…'></textarea></div>"
         "<div class='mt'><button type='submit'>BROADCAST</button></div></form>"
         "</div></div>"
+
+        # ---- automatic engine
+        '<div class="pane" data-pane="engine">'
+        "<h2>Automatic Signal Engine</h2>"
+        "<p class='sub'>Continuously scans the configured markets. START ENGINE enables the signal gate and starts Telegram delivery when configured.</p>"
+        "<div class='row'>"
+        f"<form method='post' action='/api/admin/engine'><input type='hidden' name='action' value='start'><button type='submit'>START ENGINE</button></form>"
+        f"<form method='post' action='/api/admin/engine'><input type='hidden' name='action' value='stop'><button type='submit' class='ghost'>STOP ENGINE</button></form>"
+        f"<form method='post' action='/api/admin/engine'><input type='hidden' name='action' value='restart'><button type='submit' class='ghost'>RESTART ENGINE</button></form>"
+        "</div>"
+        "<table><tbody>"
+        f"<tr><th>Status</th><td>{_badge('LIVE' if engine_live else 'STOPPED', fill=engine_live)}</td></tr>"
+        f"<tr><th>Pairs</th><td>{esc(settings.get('engine_pairs'))}</td></tr>"
+        f"<tr><th>Timeframe / Interval</th><td>{esc(settings.get('engine_timeframe'))} / {esc(settings.get('engine_interval_seconds'))}s</td></tr>"
+        f"<tr><th>Started</th><td>{esc(engine.get('started_at') or '—')}</td></tr>"
+        f"<tr><th>Last Cycle</th><td>{esc(engine.get('last_cycle_at') or '—')}</td></tr>"
+        f"<tr><th>Cycles / Scans / Signals</th><td>{esc(engine.get('cycles', 0))} / {esc(engine.get('scans', 0))} / {esc(engine.get('signals', 0))}</td></tr>"
+        f"<tr><th>Errors</th><td>{esc(engine.get('errors', 0))} — {esc(engine.get('last_error') or 'none')}</td></tr>"
+        "</tbody></table>"
+        "<p class='note'>Edit pairs, timeframe, and scan interval in Settings. Restart the engine after changing them for an immediate clean cycle.</p>"
+        "</div>"
 
         # ---- bot
         '<div class="pane" data-pane="bot">'
