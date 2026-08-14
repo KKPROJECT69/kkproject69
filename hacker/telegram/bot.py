@@ -21,7 +21,7 @@ from ..analysis.market_analyzer import MarketAnalyzer
 from ..backtest.engine import BacktestEngine
 from ..charting.render import render_chart
 from ..config.settings import get_settings
-from ..models.enums import Direction, ResultType, Timeframe
+from ..models.enums import AccessLevel, Direction, ResultType, Timeframe
 from ..models.signal import FinalSignal
 from ..pipeline import SignalPipeline
 from ..results.evaluator import ResultEvaluator
@@ -32,6 +32,7 @@ from ..users.access import AccessManager
 from .sender import TelegramSignalSender
 from .state import StateStore
 from .ui import (
+    admin_menu,
     back_menu,
     filters_menu,
     live_session_menu,
@@ -63,6 +64,7 @@ class HackerBot:
         stats_repo: StatsRepo | None = None,
         registry=None,
         access: AccessManager | None = None,
+        controller=None,
     ) -> None:
         self.settings = get_settings()
         self.pipeline = pipeline
@@ -70,6 +72,7 @@ class HackerBot:
         self.stats_repo = stats_repo
         self.registry = registry
         self.access = access or AccessManager(user_repo, self.settings.admin_id_set)
+        self.controller = controller
         self.sender = TelegramSignalSender()
         self.analyzer = MarketAnalyzer()
         self.evaluator = ResultEvaluator()
@@ -89,6 +92,7 @@ class HackerBot:
 
         app.add_handler(CommandHandler("start", self.cmd_start))
         app.add_handler(CommandHandler("help", self.cmd_help))
+        app.add_handler(CommandHandler("admin", self.cmd_admin))
         app.add_handler(CallbackQueryHandler(self.on_callback))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_text))
         app.add_error_handler(self.on_error)
@@ -124,6 +128,12 @@ class HackerBot:
         user = update.effective_user
         if user is not None:
             await self.user_repo.upsert(user.id, username=user.username)
+            if await self.access.is_banned(user.id):
+                await update.effective_message.reply_text(
+                    "⛔ <b>ACCESS DENIED</b>\nYour account has been banned.",
+                    parse_mode="HTML",
+                )
+                return
         await update.effective_message.reply_text(
             f"Welcome to <b>HACKER GenAI+</b> 👋\n\n{ABOUT}",
             parse_mode="HTML",
@@ -133,7 +143,37 @@ class HackerBot:
     async def cmd_help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text(ABOUT, parse_mode="HTML", reply_markup=main_menu())
 
+    async def cmd_admin(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user = update.effective_user
+        if user is None:
+            return
+        level = await self.access.level(user.id)
+        if level != AccessLevel.ADMIN:
+            await update.effective_message.reply_text(
+                "🔒 <b>ADMIN ONLY</b>\nThis menu is restricted to administrators.",
+                parse_mode="HTML",
+            )
+            return
+        await update.effective_message.reply_text(
+            "🛠 <b>ADMIN CONTROL</b>\nManage the bot, signals & users 👇",
+            parse_mode="HTML",
+            reply_markup=admin_menu(),
+        )
+
     async def on_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        user = update.effective_user
+        if user is None:
+            return
+        state = self.states.get(user.id)
+        if state.pending_action == "broadcast":
+            state.pending_action = None
+            if self.controller is not None:
+                ok = await self.controller.broadcast(update.effective_message.text or "")
+                await update.effective_message.reply_text(
+                    "📢 Broadcast sent." if ok else "❌ Broadcast failed (Telegram not configured).",
+                    reply_markup=admin_menu(),
+                )
+            return
         await update.effective_message.reply_text("Use the buttons below 👇", reply_markup=main_menu())
 
     # ------------------------------------------------------------ callbacks
@@ -145,6 +185,18 @@ class HackerBot:
         if user is None:
             return
         state = self.states.get(user.id)
+
+        if await self.access.is_banned(user.id):
+            await query.answer("Your account has been banned.", show_alert=True)
+            return
+
+        # ---- admin controls (ADMIN only) --------------------------------
+        if data.startswith("admin:"):
+            if await self.access.level(user.id) != AccessLevel.ADMIN:
+                await query.answer("Admin only", show_alert=True)
+                return
+            await self._handle_admin(query, data, state)
+            return
 
         # ---- pair / timeframe selectors (context-sensitive) ------------
         if data.startswith("pair:"):
@@ -187,6 +239,13 @@ class HackerBot:
             state.pending_action = "live_signal"
             await query.edit_message_text("Choose pair 👇", reply_markup=pair_menu("pair"))
         elif data == "menu:otc_signal":
+            if not await self.access.can(user.id, "otc_future_signal"):
+                await query.edit_message_text(
+                    "🔒 <b>PREMIUM ONLY</b>\nOTC Future Signal requires PREMIUM/VIP access.",
+                    parse_mode="HTML",
+                    reply_markup=back_menu(),
+                )
+                return
             state.pending_action = "otc_signal"
             await query.edit_message_text("Choose OTC pair 👇", reply_markup=pair_menu("pair"))
         elif data == "menu:market_analysis":
@@ -266,6 +325,62 @@ class HackerBot:
             await query.edit_message_text(ABOUT, parse_mode="HTML", reply_markup=back_menu())
         else:
             await query.edit_message_text("🚧 Feature coming soon.", reply_markup=back_menu())
+
+    # ------------------------------------------------------------- admin
+    async def _handle_admin(self, query, data: str, state) -> None:
+        controller = self.controller
+        if controller is None:
+            await query.edit_message_text("⚠️ Admin panel unavailable.", reply_markup=back_menu())
+            return
+
+        if data == "admin:status":
+            status = await controller.status()
+            text = (
+                "🛠 <b>SYSTEM STATUS</b>\n"
+                "━━━━━━━━━━━━━━\n"
+                f"🟢 Bot: <b>{'ONLINE' if status['running'] else 'STANDBY'}</b>\n"
+                f"🚦 Signals: <b>{'ON' if status['signals_enabled'] else 'OFF'}</b>\n"
+                f"📡 Signals: <b>{status['signals_total']}</b> "
+                f"({status['signals_delivered']} delivered)\n"
+                f"👥 Users: <b>{status['users_total']}</b>\n"
+                f"📈 Win rate: <b>{status['stats']['accuracy']}%</b>\n"
+                f"⏱ Uptime: <b>{int(status['uptime_seconds'])}s</b>"
+            )
+            await query.edit_message_text(text, parse_mode="HTML", reply_markup=admin_menu())
+        elif data == "admin:toggle_signals":
+            enabled = await controller.set_signals_enabled(not controller.signals_enabled)
+            await query.edit_message_text(
+                f"🚦 Signal delivery: <b>{'ON ✅' if enabled else 'OFF 🚫'}</b>",
+                parse_mode="HTML",
+                reply_markup=admin_menu(),
+            )
+        elif data == "admin:ping":
+            ok = await controller.send_deploy_notification()
+            await query.edit_message_text(
+                "🔔 Deploy ping sent." if ok else "❌ Telegram not configured.",
+                parse_mode="HTML",
+                reply_markup=admin_menu(),
+            )
+        elif data == "admin:broadcast":
+            state.pending_action = "broadcast"
+            await query.edit_message_text(
+                "📢 Send the broadcast text now 👇", reply_markup=admin_menu()
+            )
+        elif data == "admin:users":
+            users = await controller.list_users()
+            lines = ["👥 <b>USERS</b>", "━━━━━━━━━━━━━━"]
+            for u in users[:10]:
+                banned = " 🚫BANNED" if u.get("banned") else ""
+                lines.append(
+                    f"• <code>{u['telegram_id']}</code> {u.get('username') or ''} "
+                    f"— <b>{u.get('access_level')}</b>{banned}"
+                )
+            lines.append(f"Total: <b>{len(users)}</b>")
+            await query.edit_message_text(
+                "\n".join(lines), parse_mode="HTML", reply_markup=admin_menu()
+            )
+        else:
+            await query.edit_message_text("🛠 Admin menu 👇", reply_markup=admin_menu())
 
     # ------------------------------------------------------------ actions
     async def _finish_action(self, query, state) -> None:

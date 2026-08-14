@@ -1,0 +1,7 @@
+# Pin Python 3.11 and install dependencies. Nixpacks auto-detects
+# requirements.txt; this just makes the interpreter version explicit.
+[phases.setup]
+nixPkgs = ["python311"]
+
+[phases.install]
+cmds = ["pip install --upgrade pip", "pip install -r requirements.txt"]

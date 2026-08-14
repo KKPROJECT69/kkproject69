@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS users (
     username     TEXT,
     access_level TEXT NOT NULL DEFAULT 'FREE',
     settings_json TEXT,
-    created_at   TEXT
+    created_at   TEXT,
+    banned       INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -76,7 +77,27 @@ CREATE TABLE IF NOT EXISTS paper_trades (
     result      TEXT,
     created_at  TEXT
 );
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor      TEXT,
+    action     TEXT,
+    detail     TEXT,
+    created_at TEXT
+);
 """
+
+# Lightweight, idempotent column migrations for databases created before a
+# column existed. ``CREATE TABLE IF NOT EXISTS`` does not add missing columns
+# to an existing table, so new columns must be added explicitly.
+MIGRATIONS: list[tuple[str, str, str]] = [
+    ("users", "banned", "INTEGER NOT NULL DEFAULT 0"),
+]
 
 
 class Database:
@@ -93,7 +114,18 @@ class Database:
             self._conn.row_factory = aiosqlite.Row
             await self._conn.executescript(SCHEMA)
             await self._conn.commit()
+            await self._migrate()
         return self._conn
+
+    async def _migrate(self) -> None:
+        """Apply idempotent ALTER TABLE migrations for older databases."""
+        assert self._conn is not None
+        for table, column, ddl in MIGRATIONS:
+            cursor = await self._conn.execute(f"PRAGMA table_info({table})")
+            columns = [row[1] for row in await cursor.fetchall()]
+            if column not in columns:
+                await self._conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+        await self._conn.commit()
 
     async def execute(self, sql: str, params: tuple = ()) -> aiosqlite.Cursor:
         conn = await self.connect()
