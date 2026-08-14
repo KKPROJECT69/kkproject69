@@ -18,9 +18,13 @@ class Settings(BaseSettings):
     market_proxy: str | None = None
 
     # Market data
-    market_source: str = "mock"  # mock | novex | oanda | cortex
-    novex_base_url: str = ""
-    novex_api_key: str = ""
+    market_source: str = "auto"  # auto (router) | mock
+    quotex_base_url: str = "https://quotex-proxy-pal.lovable.app/api/public"
+    quotex_ws_url: str = "wss://quotex-proxy-pal.lovable.app/api/public/ws"
+    novex_payout_url: str = "https://novexai.org/api.php"
+    oanda_base_url: str = "https://api-fxpractice.oanda.com"
+    oanda_api_key: str = ""
+    oanda_account_id: str = ""
 
     # News calendar
     forex_factory_url: str = ""

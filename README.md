@@ -30,6 +30,20 @@ Run the test suite:
 pytest -q
 ```
 
+## Live data sources
+
+The `MarketSourceRouter` routes each pair to the right provider:
+
+| Pair type | Candles | Payout |
+|-----------|---------|--------|
+| OTC (`USDBDT_otc`, `*-OTC`) | Quotex proxy REST (`/api/public/candles`) | NovexAI (`api.php`) |
+| Live forex (`EUR_USD`, …) | OANDA practice (`/v3/instruments/.../candles`) | none |
+| Anything else / on upstream error | deterministic mock | none |
+
+Config in `.env`: `QUOTEX_BASE_URL`, `QUOTEX_WS_URL`, `NOVEX_PAYOUT_URL`,
+`OANDA_BASE_URL`, `OANDA_API_KEY`, `OANDA_ACCOUNT_ID`. A WebSocket tick stream
+is also available at `hacker/data_sources/quotex_ws.py`.
+
 ## Package layout
 
 ```
