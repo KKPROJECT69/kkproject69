@@ -88,8 +88,7 @@ async def amain() -> None:
             bot = Bot(token=settings.telegram_bot_token, request=request)
             dispatcher.bot = bot
             hacker_bot = HackerBot(pipeline, user_repo, registry=registry)
-            app = hacker_bot.build()
-            await hacker_bot.run(app)
+            await hacker_bot.run()
         else:
             log.info("Telegram not configured — running offline smoke test")
             signal = await pipeline.generate("USDBDT_otc", Timeframe.M1)

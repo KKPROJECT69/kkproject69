@@ -1,6 +1,7 @@
 """Telegram bot — application, handlers, polling (button-first UX)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from telegram import Update
@@ -56,14 +57,42 @@ class HackerBot:
         app.add_handler(CommandHandler("help", self.cmd_help))
         app.add_handler(CallbackQueryHandler(self.on_callback))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_text))
+        app.add_error_handler(self.on_error)
         return app
 
-    async def run(self, app: Application) -> None:
-        await app.initialize()
-        await app.start()
-        await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
-        log.info("Telegram bot polling started")
-        await app.updater.idle()
+    async def on_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        log.error("Telegram error: %s", context.error)
+
+    async def run(self) -> None:
+        """Start polling with resilient connect: retry with exponential
+        backoff so a temporary Telegram outage (e.g. network/provider issues)
+        does not kill the bot. Only after all attempts fail does it re-raise.
+        """
+        max_attempts = 8
+        for attempt in range(1, max_attempts + 1):
+            app = self.build()
+            try:
+                await app.initialize()
+                await app.start()
+                await app.updater.start_polling(allowed_updates=Update.ALL_TYPES)
+                log.info("Telegram bot polling started")
+                await app.updater.idle()
+                return
+            except Exception as exc:  # noqa: BLE001
+                log.warning(
+                    "Telegram connect attempt %d/%d failed: %s",
+                    attempt,
+                    max_attempts,
+                    exc,
+                )
+                try:
+                    await app.stop()
+                    await app.shutdown()
+                except Exception:  # noqa: BLE001
+                    pass
+                if attempt >= max_attempts:
+                    raise
+                await asyncio.sleep(min(2 ** (attempt - 1), 60))
 
     # ---- handlers -------------------------------------------------------
     async def cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
